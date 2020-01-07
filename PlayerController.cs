@@ -1,19 +1,30 @@
 ﻿using UnityEngine;
 using System.Collections;
 using DebugSystemCollections;
+using System.Collections.Generic;
 [RequireComponent (typeof(CharacterController))]
+[RequireComponent (typeof(AudioSource))]
 public class PlayerController : MonoBehaviour {
-
-	// Floats
-	[Range(0,20)]
+    #region variables
+    // Floats
+    [Range(0,20)]
 	public float movementSpeed;
 	[Range(0,10)]
 	public float mouseSensitivity;
+    [Range(0, 10)]
+    public float ADSSensitivity;
+    public float currentSensitivity;
 	[Range(0,30f)]
 	public float jumpSpeed;
 
-	[Range(0,20)]
+    [Range(0, 20)]
+    public float walkSpeed;
+    [Range(0,20)]
 	public float sprintSpeed;
+    [Range(0, 20)]
+    public float gravity;
+
+    
 	
 	// DO NOT TOUCH
 	public float sideSpeed;
@@ -32,7 +43,12 @@ public class PlayerController : MonoBehaviour {
     GameObject lastWeapon;
 	// Character Controller
 	public CharacterController characterController;
-	
+
+
+    // Audio
+    AudioSource audioSource;
+    public List<AudioClip> footsteps = new List<AudioClip>();
+
 	// Transforms.
 
 	// Bools
@@ -44,22 +60,24 @@ public class PlayerController : MonoBehaviour {
 
     //FSM
 
-    private PlayerBaseState currentState;
+    public PlayerBaseState currentState;
     public readonly Player_IdleState playerIdleState = new Player_IdleState();
     public readonly Player_RunningState playerRunningState = new Player_RunningState();
     public readonly Player_JumpingState playerJumpingState = new Player_JumpingState();
     public readonly Player_SprintState playerSprintState = new Player_SprintState();
-
+    #endregion
     void Awake()
     {
+        movementSpeed = walkSpeed;
         TransitionToState(playerIdleState);
+        currentSensitivity = mouseSensitivity;
     }
 
 	// Use this for initialization
 	void Start () {
 		
 		characterController = GetComponent<CharacterController>();
-
+        audioSource = GetComponent<AudioSource>();
 
 		Cursor.visible = false;
 		Cursor.lockState = CursorLockMode.Locked;
@@ -75,9 +93,10 @@ public class PlayerController : MonoBehaviour {
 
 	private void FixedUpdate() 
 	{
-		Rotation();
-		Movement();
-
+        //int clip = Random.Range(0, 1);
+        audioSource.clip = footsteps[1];
+        Rotation();
+        PlayerGravity();
 	}
 
     public void TransitionToState(PlayerBaseState state)
@@ -92,29 +111,36 @@ public class PlayerController : MonoBehaviour {
 	{
 		// Rotation
 		
-		float rotLeftRight = Input.GetAxis("Mouse X") * mouseSensitivity;
+		float rotLeftRight = Input.GetAxis("Mouse X") * currentSensitivity;
 		transform.Rotate(0, rotLeftRight, 0);
 
 		
-		verticalRotation -= Input.GetAxis("Mouse Y") * mouseSensitivity;
+		verticalRotation -= Input.GetAxis("Mouse Y") * currentSensitivity;
 		verticalRotation = Mathf.Clamp(verticalRotation, -upDownRange, upDownRange);
 		Camera.main.transform.localRotation = Quaternion.Euler(verticalRotation, 0, 0);
 	}
 
 	public void Movement()
 	{
-		// Movement
-		if(playerIsSprinting)
-		{
-			//forwardSpeed = Input.GetAxis("Vertical") * sprintSpeed;
-		}
-		else
-		{
-			
-		}
-		
+        sideSpeed = Input.GetAxis("Horizontal") * movementSpeed;
+        forwardSpeed = Input.GetAxis("Vertical") * movementSpeed;
+        speed = new Vector3(sideSpeed, verticalVelocity, forwardSpeed);
+        speed = transform.rotation * speed;
+        characterController.Move(speed * Time.deltaTime);
 
-	}
+        //InvokeRepeating("PlayWalkSound", 0f, 0.5f);
+        
+        if (Input.GetKey(KeyCode.LeftShift))
+        {
+            movementSpeed = sprintSpeed;
+        }
+        else
+        {
+            movementSpeed = walkSpeed;
+        }
+
+        
+    }
 
 	public void PlayerInputs()
 	{
@@ -131,4 +157,32 @@ public class PlayerController : MonoBehaviour {
 
 	}
 	
+    public void PlayerGravity()
+    {
+        if (!characterController.isGrounded)
+        {
+            characterController.Move(new Vector3(0, -gravity * Time.deltaTime, 0));
+        }
+        else if (characterController.isGrounded)
+        {
+            characterController.Move(new Vector3(0, 0, 0));
+        }
+    }
+
+    public IEnumerator PlayFootSteps(float speed)
+    {
+       
+       
+        yield return new WaitForSeconds(speed);
+        StartCoroutine(PlayFootSteps(speed));
+        
+    }
+
+    void PlayWalkSound() 
+    {
+        if (Input.GetButton("Vertical") || Input.GetButton("Horizontal") || !audioSource.isPlaying)
+        {
+            audioSource.PlayOneShot(audioSource.clip);
+        }
+    }
 }
